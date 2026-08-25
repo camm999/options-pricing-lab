@@ -7,6 +7,12 @@ finite-difference), Monte Carlo simulation, and a Newton-Raphson implied volatil
 first to theoretical examples, then to live option chains pulled from Yahoo Finance to build real
 volatility smiles and surfaces.
 
+<p align="center">
+  <img src="docs/img/call_payoff_vs_value.png" width="32%" alt="Call payoff vs current value">
+  <img src="docs/img/delta_surface.png" width="32%" alt="Call delta surface">
+  <img src="docs/img/implied_vol_surface.png" width="32%" alt="Recovered implied volatility surface">
+</p>
+
 ## What's here
 
 - **`src/optionspricing/`** — the pricing engine, as a reusable, tested Python package rather than

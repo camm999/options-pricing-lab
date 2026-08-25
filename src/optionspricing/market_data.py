@@ -93,14 +93,60 @@ def fetch_option_snapshot(occ_ticker):
     )
 
 
-def volatility_smile(root_symbol, expiry_str, option_type="call"):
-    """Strike vs. Yahoo's quoted implied volatility for one expiry (their IV, not ours)."""
+def _liquid_rows(table):
+    """
+    Restrict an option chain table to strikes with some real trading interest.
+
+    Untraded strikes (zero volume and zero open interest) frequently carry
+    degenerate placeholder values in Yahoo's data rather than a genuine
+    quote -- e.g. impliedVolatility of exactly 0, or suspicious values that
+    are each roughly half the previous one (0.25, 0.125, 0.0625, ...),
+    which is a bisection-solver artifact, not a real market IV.
+    """
+    volume = table["volume"].fillna(0)
+    open_interest = table["openInterest"].fillna(0)
+    return table[(volume > 0) | (open_interest > 0)]
+
+
+def _solve_chain_iv(table, option_type, S, T, r, q):
+    """
+    Solve implied volatility ourselves from each row's lastPrice, rather than
+    trusting Yahoo's own impliedVolatility column -- that column is *also*
+    derived from lastPrice on Yahoo's end, so a stale/untraded contract gives
+    a stale or degenerate IV there too (seen in practice: exactly 0, or a
+    suspicious halving pattern like 0.25, 0.125, 0.0625, ...) even when
+    filtered by volume/open interest. Rows where our own solver doesn't
+    converge are dropped rather than plotted.
+    """
+    results = []
+    for _, row in _liquid_rows(table).dropna(subset=["lastPrice", "strike"]).iterrows():
+        if row["lastPrice"] <= 0:
+            continue
+        iv = implied_volatility_newton(
+            market_price=row["lastPrice"], S=S, K=row["strike"], T=T, r=r, q=q, option_type=option_type
+        )
+        if not np.isnan(iv):
+            results.append({"strike": row["strike"], "implied_vol": iv})
+    return pd.DataFrame(results)
+
+
+def volatility_smile(root_symbol, expiry_str, option_type="call", r=None):
+    """
+    Strike vs. implied volatility for one expiry, solved ourselves from each
+    contract's lastPrice via implied_volatility_newton.
+    """
     ticker = yf.Ticker(root_symbol)
+    underlying_price = float(ticker.history(period="1d")["Close"].iloc[-1])
+    dividend_yield = ticker.info.get("trailingAnnualDividendYield") or 0.0
+    r = risk_free_rate() if r is None else r
+
+    expiry = datetime.strptime(expiry_str, "%Y-%m-%d").date()
+    T = (expiry - date.today()).days / 365.0
+
     chain = ticker.option_chain(expiry_str)
     table = chain.calls if option_type == "call" else chain.puts
 
-    smile = table[["strike", "impliedVolatility"]].dropna()
-    return smile.rename(columns={"impliedVolatility": "implied_vol"}).reset_index(drop=True)
+    return _solve_chain_iv(table, option_type, underlying_price, T, r, dividend_yield).reset_index(drop=True)
 
 
 def implied_vol_surface(root_symbol, r=None, max_expiries=None):
@@ -117,7 +163,7 @@ def implied_vol_surface(root_symbol, r=None, max_expiries=None):
     today = date.today()
     expiries = ticker.options[:max_expiries] if max_expiries else ticker.options
 
-    rows = []
+    frames = []
     for expiry_str in expiries:
         expiry = datetime.strptime(expiry_str, "%Y-%m-%d").date()
         T = (expiry - today).days / 365.0
@@ -130,20 +176,13 @@ def implied_vol_surface(root_symbol, r=None, max_expiries=None):
             continue
 
         for option_type, table in (("call", chain.calls), ("put", chain.puts)):
-            for _, row in table.dropna(subset=["lastPrice", "strike"]).iterrows():
-                if row["lastPrice"] <= 0:
-                    continue
-                iv = implied_volatility_newton(
-                    market_price=row["lastPrice"],
-                    S=underlying_price,
-                    K=row["strike"],
-                    T=T,
-                    r=r,
-                    q=dividend_yield,
-                    option_type=option_type,
-                )
-                rows.append({"strike": row["strike"], "time_to_expiry": T, "implied_vol": iv, "option_type": option_type})
+            solved = _solve_chain_iv(table, option_type, underlying_price, T, r, dividend_yield)
+            if solved.empty:
+                continue
+            solved["time_to_expiry"] = T
+            solved["option_type"] = option_type
+            frames.append(solved)
 
-    # Drop quotes where the solver didn't converge (stale/illiquid prices,
-    # or near-expiry contracts with near-zero vega) instead of plotting them.
-    return pd.DataFrame(rows).dropna(subset=["implied_vol"])
+    if not frames:
+        return pd.DataFrame(columns=["strike", "implied_vol", "time_to_expiry", "option_type"])
+    return pd.concat(frames, ignore_index=True)
