@@ -1,0 +1,16 @@
+[project]
+name = "optionspricing"
+version = "0.1.0"
+description = "Black-Scholes option pricing, Greeks, Monte Carlo, and implied volatility toolkit"
+requires-python = ">=3.9"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
