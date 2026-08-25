@@ -144,4 +144,6 @@ def implied_vol_surface(root_symbol, r=None, max_expiries=None):
                 )
                 rows.append({"strike": row["strike"], "time_to_expiry": T, "implied_vol": iv, "option_type": option_type})
 
-    return pd.DataFrame(rows)
+    # Drop quotes where the solver didn't converge (stale/illiquid prices,
+    # or near-expiry contracts with near-zero vega) instead of plotting them.
+    return pd.DataFrame(rows).dropna(subset=["implied_vol"])
