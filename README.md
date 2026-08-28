@@ -29,10 +29,10 @@ volatility smiles and surfaces.
   importing from `src/optionspricing` rather than redefining functions inline:
   1. `01_black_scholes_and_payoffs.ipynb` — pricing formulas, payoff vs. current-value analysis.
   2. `02_greeks.ipynb` — all five Greeks, 2D/3D sensitivity plots, and a numerical cross-check.
-  3. `03_monte_carlo_and_implied_vol.ipynb` — GBM simulation, Monte Carlo convergence, the
-     Newton-Raphson solver, and a synthetic volatility smile/surface that validates the solver
-     recovers a known, non-constant input volatility.
-  4. `04_real_market_implied_vol.ipynb` — the same smile/surface built from a live option chain.
+  3. `03_monte_carlo_and_implied_vol.ipynb` — GBM simulation, Monte Carlo convergence, and the
+     Newton-Raphson implied volatility solver.
+  4. `04_real_market_implied_vol.ipynb` — a real volatility smile and surface built from a live
+     option chain, using that same Newton-Raphson solver.
 - **`tests/`** — a `pytest` suite: put-call parity, analytical-vs-finite-difference Greeks agreement,
   Monte Carlo convergence, and implied-volatility round-tripping.
 
