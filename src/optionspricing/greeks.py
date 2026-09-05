@@ -92,7 +92,8 @@ def numerical_vega(S, K, T, r, sigma, q=0.0, h=0.001):
 
 
 def numerical_theta(S, K, T, r, sigma, q=0.0, h=1 / 365):
-    # theta is -dV/dt = dV/dT, so a forward step in T is a backward step in time-to-live
+    # calendar time t and time-to-expiry T run in opposite directions, so
+    # theta = dV/dt = -dV/dT: take the central difference in T and negate it
     return -(
         black_scholes_call(S, K, T + h, r, sigma, q) - black_scholes_call(S, K, T - h, r, sigma, q)
     ) / (2 * h)

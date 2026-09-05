@@ -39,14 +39,27 @@ volatility smiles and surfaces.
 ## Install
 
 ```bash
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
+python -m pip install -e .
 ```
+
+The second command installs `optionspricing` itself in editable mode. That is what lets the notebooks
+and the snippets below `import optionspricing` from anywhere, so nothing needs to patch `sys.path`.
+
+Use `python -m pip` rather than a bare `pip` so the install lands in the interpreter you are actually
+running — if you have more than one Python (a system install and a conda env, say), a bare `pip` can
+install into the wrong one and the notebooks will still fail to import the package.
 
 ## Run the tests
 
 ```bash
+python -m pip install -r requirements-dev.txt
 pytest
 ```
+
+The suite never makes a network call, so `requirements-dev.txt` is a narrower set than
+`requirements.txt` — no `yfinance`, no notebook stack. CI installs that file, which keeps the test
+run independent of Yahoo Finance and of `yfinance`'s frequent API changes.
 
 ## Use the notebooks
 
@@ -54,8 +67,9 @@ pytest
 jupyter notebook notebooks/
 ```
 
-Notebook 4 needs internet access (it queries Yahoo Finance) and will prompt for an OCC-format option
-ticker, e.g. `AAPL260320C00250000`.
+Notebook 4 needs internet access (it queries Yahoo Finance). The contract it prices is set by the
+`OPTION_TICKER` constant near the top of the notebook — any OCC-format ticker, e.g.
+`AAPL270917C00225000` — so the notebook runs start to finish without prompting.
 
 ## Use the package directly
 
@@ -80,8 +94,7 @@ The theoretical notebooks each end with a "where this model breaks" section — 
 - **Constant rates and no frictions** — real hedging has transaction costs, and rates aren't constant
   over the life of a long-dated option.
 
-These aren't bugs to fix so much as the reason more sophisticated models (stochastic volatility, jump
-diffusion) exist — Black-Scholes is the baseline everything else is measured against.
+These aren't bugs to fix so much as the reason more sophisticated models (stochastic volatility, jumpdiffusion) exist,so Black-Scholes is the baseline everything else is measured against.
 
 ## A note on the real-market notebook
 

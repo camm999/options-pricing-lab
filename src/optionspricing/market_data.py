@@ -13,7 +13,6 @@ from datetime import date, datetime
 
 import numpy as np
 import pandas as pd
-import yfinance as yf
 
 from .implied_vol import implied_volatility_newton
 
@@ -43,9 +42,22 @@ def parse_occ_ticker(ticker):
     return ParsedOccTicker(root=match["root"], expiry=expiry, option_type=option_type, strike=strike)
 
 
+def _ticker(symbol):
+    """yfinance handle for `symbol`.
+
+    yfinance is imported here rather than at module scope so the pure parsing
+    helpers above -- and the tests covering them -- can be imported without the
+    network stack installed. That also keeps CI off yfinance, whose API changes
+    often, since no test makes a live call.
+    """
+    import yfinance as yf
+
+    return yf.Ticker(symbol)
+
+
 def risk_free_rate():
     """Latest 13-week T-bill rate (^IRX) as a decimal, used as a risk-free rate proxy."""
-    irx = yf.Ticker("^IRX")
+    irx = _ticker("^IRX")
     return irx.info["previousClose"] / 100.0
 
 
@@ -67,7 +79,18 @@ def fetch_option_snapshot(occ_ticker):
     """Fetch everything needed to price a single option off a live OCC ticker."""
     parsed = parse_occ_ticker(occ_ticker)
 
-    underlying = yf.Ticker(parsed.root)
+    # Checked before any network work: at T <= 0 every Black-Scholes quantity
+    # divides by sigma*sqrt(T) and silently returns NaN, which surfaces much
+    # later as an unexplained "nan" implied vol. implied_vol_surface() skips
+    # such expiries; for a single explicitly requested contract, say so.
+    time_to_expiry = (parsed.expiry - date.today()).days / 365.0
+    if time_to_expiry <= 0:
+        raise ValueError(
+            f"{occ_ticker} expires {parsed.expiry}, which is not in the future; "
+            "Black-Scholes is undefined at or past expiry"
+        )
+
+    underlying = _ticker(parsed.root)
     underlying_price = underlying.history(period="1d")["Close"].iloc[-1]
     dividend_yield = underlying.info.get("trailingAnnualDividendYield") or 0.0
 
@@ -76,8 +99,6 @@ def fetch_option_snapshot(occ_ticker):
     row = table[table["strike"] == parsed.strike]
     if row.empty:
         raise ValueError(f"No {parsed.option_type} at strike {parsed.strike} for {parsed.root} {parsed.expiry}")
-
-    time_to_expiry = (parsed.expiry - date.today()).days / 365.0
 
     return OptionSnapshot(
         ticker=occ_ticker,
@@ -135,7 +156,7 @@ def volatility_smile(root_symbol, expiry_str, option_type="call", r=None):
     Strike vs. implied volatility for one expiry, solved ourselves from each
     contract's lastPrice via implied_volatility_newton.
     """
-    ticker = yf.Ticker(root_symbol)
+    ticker = _ticker(root_symbol)
     underlying_price = float(ticker.history(period="1d")["Close"].iloc[-1])
     dividend_yield = ticker.info.get("trailingAnnualDividendYield") or 0.0
     r = risk_free_rate() if r is None else r
@@ -155,7 +176,7 @@ def implied_vol_surface(root_symbol, r=None, max_expiries=None):
     expiries, solving each point ourselves with implied_volatility_newton
     rather than trusting Yahoo's quoted IV.
     """
-    ticker = yf.Ticker(root_symbol)
+    ticker = _ticker(root_symbol)
     underlying_price = float(ticker.history(period="1d")["Close"].iloc[-1])
     dividend_yield = ticker.info.get("trailingAnnualDividendYield") or 0.0
     r = risk_free_rate() if r is None else r

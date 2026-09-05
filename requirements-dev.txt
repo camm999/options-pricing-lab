@@ -1,0 +1,8 @@
+# Test dependencies only. The pytest suite never makes a network call, so this
+# deliberately omits yfinance -- whose API changes frequently and could turn CI
+# red with no commit of ours -- along with the notebook-only stack (matplotlib,
+# jupyter). See requirements.txt for the full set needed to run the notebooks.
+numpy
+scipy
+pandas
+pytest
